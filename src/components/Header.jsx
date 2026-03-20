@@ -36,6 +36,18 @@ export default function Header({
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {appMode === "upload" && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "5px",
+              padding: "4px 9px", borderRadius: "4px",
+              background: "#050f0a", border: "1px solid #0d2a1a",
+            }}>
+              <span style={{ fontSize: "11px" }}>🔒</span>
+              <span style={{ fontSize: "9px", color: "#2a7040", letterSpacing: ".06em", fontFamily: "'IBM Plex Mono'" }}>
+                SCHEMA ONLY
+              </span>
+            </div>
+          )}
           {/* Language toggle */}
           <div style={{ display: "flex", gap: "2px", background: "#030608", border: "1px solid #111e30", borderRadius: "5px", padding: "3px" }}>
             {[["python", "🐍 Python"], ["r", "R"]].map(([lang, label]) => (

@@ -4,8 +4,11 @@ import { specToContextString } from "../parsers/specParser.js";
 // ─── Code Generation Agent ────────────────────────────────────────────────────
 // Generates BOTH R and Python programs using:
 //   1. Parsed shell metadata (structure, column labels, row groups, formats)
-//   2. Data Analyst findings (actual unique values, stats, arm values)
+//   2. Data Analyst findings (cardinality + stats — NO actual data values)
 //   3. ADaM spec context (variable labels, codelists)
+//
+// ⚠ PRIVACY: only variable names, types, row counts, and aggregate statistics
+// are ever included in API payloads — actual patient data values are never sent.
 //
 // R:      executable via WebR in browser + downloadable for local use
 // Python: executable via Pyodide in browser
@@ -23,9 +26,8 @@ For row_groups rows with enumerate_dynamically=true:
 For rows with enumerate_dynamically=false (specific pre-defined stats rows like "n / Mean (SD)"):
   - These are computed rows, not category lists — calculate and display them as fixed rows
 
-The Data Analyst Findings below contain the ACTUAL unique values found in the data.
-Use these to verify your logic, but still write code that discovers values dynamically
-(the real data may differ from the sample).
+The Data Analyst Findings below contain variable cardinality and statistics — NOT actual data values.
+Use them to understand variable types and distributions, then write dynamic code accordingly.
 
 ━━━ SHELL FIDELITY ━━━
 1. Column headers: reproduce EXACTLY from metadata.columns[].label
@@ -52,14 +54,21 @@ Use these to verify your logic, but still write code that discovers values dynam
 - Last line MUST be: OUTPUT_HTML = "<complete html string>"
 - Apply dark theme inline styles consistent with the app`;
 
-function datasetsToSchemaPreview(adamDatasets, dsNames) {
+// ⚠ PRIVACY: builds schema metadata only — column names + inferred types + row
+// counts. No actual data values are included in the API payload.
+function datasetsToSchemaOnly(adamDatasets, dsNames) {
   return dsNames
     .filter(ds => adamDatasets[ds])
     .map(ds => {
       const info = adamDatasets[ds];
-      const cols = Object.keys(info.data[0] || {});
-      const sample = info.data.slice(0, 3);
-      return `# ${ds} (${info.data.length} rows)\n# Columns: ${cols.join(", ")}\n${JSON.stringify(sample, null, 2)}`;
+      const firstRow = info.data[0] || {};
+      const colDefs = Object.keys(firstRow).map(col => {
+        // Infer type from a small sample without sending any values
+        const sample = info.data.slice(0, 10).map(r => r[col]);
+        const numCount = sample.filter(v => typeof v === "number").length;
+        return `${col}:${numCount > sample.length / 2 ? "num" : "chr"}`;
+      });
+      return `# ${ds}: ${info.data.length} rows\n# Columns (name:type): ${colDefs.join(", ")}`;
     })
     .join("\n\n");
 }
@@ -71,20 +80,20 @@ export async function runCodeGenAgent({ parsedMeta, adamDatasets, adamSpec, anal
     ? parsedMeta.required_datasets
     : Object.keys(adamDatasets).slice(0, 3);
 
-  const schemaPreview = datasetsToSchemaPreview(adamDatasets, dsNames);
+  const schemaPreview = datasetsToSchemaOnly(adamDatasets, dsNames);
 
   // Build spec context for relevant variables
   const relevantVars = parsedMeta?.key_variables || [];
   const specContext = specToContextString(adamSpec, relevantVars);
 
-  // Format analyst findings as a readable section
+  // Format analyst findings — contains cardinality + stats only, no raw values
   const analystSection = analystFindings
-    ? `ANALYST FINDINGS (actual data values — use these for verification, but write dynamic code):\n${JSON.stringify(analystFindings, null, 2)}`
+    ? `ANALYST FINDINGS (variable types, cardinality, aggregate stats — no actual values):\n${JSON.stringify(analystFindings, null, 2)}`
     : "ANALYST FINDINGS: Not available — infer from dataset schemas below.";
 
   const raw = await callClaude(
     SYSTEM_PROMPT,
-    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\n${analystSection}\n\nDATA SCHEMAS (3-row sample):\n${schemaPreview}\n\nADAM SPEC:\n${specContext}`,
+    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\n${analystSection}\n\nDATA SCHEMAS (column names + types only — no data values):\n${schemaPreview}\n\nADAM SPEC:\n${specContext}`,
     7000
   );
 

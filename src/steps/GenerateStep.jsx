@@ -76,84 +76,113 @@ export default function GenerateStep({
 }
 
 // ─── Analyst findings panel ───────────────────────────────────────────────────
+// Displays structural findings only — no actual data values shown or stored.
 function AnalystFindingsView({ findings }) {
   if (!findings) return null;
-  const { arm_variable, arm_values, variables = {}, notes = [] } = findings;
+  const { arm_variable, arm_n_unique, variables = {}, notes = [] } = findings;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {/* Header */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+      {/* Privacy badge */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "8px",
+        padding: "8px 12px", background: "#050f0a", border: "1px solid #0d2a1a", borderRadius: "5px",
+      }}>
+        <span style={{ fontSize: "12px" }}>🔒</span>
+        <span style={{ fontSize: "10px", color: "#2a7040", fontFamily: "'IBM Plex Mono'" }}>
+          Privacy-safe analysis — variable structure only, no data values sent to API
+        </span>
+      </div>
+
+      {/* Treatment arm summary */}
       <div style={{ padding: "10px 14px", background: "#06101e", border: "1px solid #0d2840", borderRadius: "5px" }}>
-        <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "6px" }}>DATA ANALYST FINDINGS</div>
-        <div style={{ fontSize: "11px", color: "#3a7090" }}>
-          Treatment arm variable: <span style={{ color: "#4fc3f7" }}>{arm_variable || "—"}</span>
-          {arm_values?.length > 0 && (
-            <span style={{ color: "#2a6080" }}> → {arm_values.join(" | ")}</span>
+        <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "5px" }}>TREATMENT ARM</div>
+        <div style={{ fontSize: "11px", color: "#3a7090", fontFamily: "'IBM Plex Mono'" }}>
+          {arm_variable || "—"}
+          {arm_n_unique != null && (
+            <span style={{ color: "#2a6080" }}> — {arm_n_unique} distinct arm(s) in data</span>
           )}
         </div>
       </div>
 
-      {/* Variables */}
-      {Object.entries(variables).map(([varName, info]) => (
-        <div key={varName} style={{ padding: "10px 14px", background: "#060a14", border: "1px solid #111e30", borderRadius: "5px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-            <span style={{ fontFamily: "'IBM Plex Mono'", fontSize: "12px", color: "#4fc3f7" }}>{varName}</span>
-            <span className="badge" style={{
-              background: info.type === "categorical" ? "#071020" : "#100710",
-              color: info.type === "categorical" ? "#3080c0" : "#9060c0",
-              border: `1px solid ${info.type === "categorical" ? "#0d2840" : "#201030"}`,
-            }}>{info.type || "unknown"}</span>
-            {info.dataset && <span style={{ fontSize: "10px", color: "#1a3050" }}>{info.dataset}</span>}
-          </div>
+      {/* Variables table */}
+      <div style={{ border: "1px solid #111e30", borderRadius: "5px", overflow: "hidden" }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "140px 90px 80px 1fr",
+          padding: "6px 12px", background: "#060a14",
+          fontSize: "9px", letterSpacing: ".08em", color: "#1a3050",
+          borderBottom: "1px solid #111e30",
+        }}>
+          <span>VARIABLE</span><span>TYPE</span><span>CARDINALITY</span><span>STATS / NOTES</span>
+        </div>
+        {Object.entries(variables).map(([varName, info], i) => (
+          <div key={varName} style={{
+            display: "grid", gridTemplateColumns: "140px 90px 80px 1fr",
+            padding: "7px 12px", alignItems: "start",
+            background: i % 2 === 0 ? "#050810" : "#060a14",
+            borderBottom: "1px solid #0c1420",
+            fontSize: "11px",
+          }}>
+            {/* Variable name + label */}
+            <div>
+              <div style={{ fontFamily: "'IBM Plex Mono'", color: "#4fc3f7", fontSize: "11px" }}>{varName}</div>
+              {info.label && <div style={{ fontSize: "9px", color: "#1a3a50", marginTop: "1px" }}>{info.label}</div>}
+              {info.dataset && <div style={{ fontSize: "9px", color: "#112030" }}>{info.dataset}</div>}
+            </div>
 
-          {info.label && (
-            <div style={{ fontSize: "10px", color: "#2a5070", marginBottom: "4px" }}>{info.label}</div>
-          )}
+            {/* Type badge */}
+            <div>
+              <span className="badge" style={{
+                background: info.type === "categorical" ? "#071020" : "#100718",
+                color: info.type === "categorical" ? "#3080c0" : "#9060c0",
+                border: `1px solid ${info.type === "categorical" ? "#0d2840" : "#201030"}`,
+              }}>
+                {info.type || "—"}
+              </span>
+            </div>
 
-          {/* Categorical: show unique values */}
-          {info.type === "categorical" && info.unique_values?.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-              {info.unique_values.map(v => (
-                <span key={v} style={{
-                  padding: "1px 7px", fontSize: "10px", background: "#07101e",
-                  border: "1px solid #112030", borderRadius: "3px", color: "#5a90a8",
-                  fontFamily: "'IBM Plex Mono'",
-                }}>
-                  {String(v)}
-                </span>
-              ))}
-              {info.n_unique > info.unique_values?.length && (
-                <span style={{ fontSize: "10px", color: "#1a3a50" }}>+{info.n_unique - info.unique_values.length} more</span>
+            {/* Cardinality */}
+            <div style={{ fontFamily: "'IBM Plex Mono'", color: "#3a6080", fontSize: "11px" }}>
+              {info.n_unique != null
+                ? <span>{info.n_unique} unique</span>
+                : <span style={{ color: "#1a3050" }}>—</span>}
+            </div>
+
+            {/* Stats or codelist note */}
+            <div>
+              {info.type === "numeric" && info.stats && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                  {Object.entries(info.stats).map(([k, v]) => (
+                    <span key={k} style={{ fontSize: "10px" }}>
+                      <span style={{ color: "#1a3a50" }}>{k} </span>
+                      <span style={{ color: "#5a8090", fontFamily: "'IBM Plex Mono'" }}>
+                        {typeof v === "number" ? v.toFixed(1) : v}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {info.codelist && (
+                <div style={{ fontSize: "10px", color: "#1a4030", marginTop: "2px" }}>
+                  codelist: {info.codelist}
+                </div>
+              )}
+              {info.note && (
+                <div style={{ fontSize: "10px", color: "#3a5020", marginTop: "2px" }}>ℹ {info.note}</div>
               )}
             </div>
-          )}
+          </div>
+        ))}
+      </div>
 
-          {/* Numeric: show stats */}
-          {info.type === "numeric" && info.stats && (
-            <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
-              {Object.entries(info.stats).map(([k, v]) => (
-                <div key={k} style={{ fontSize: "10px" }}>
-                  <span style={{ color: "#1a3a50" }}>{k}: </span>
-                  <span style={{ color: "#5a8090", fontFamily: "'IBM Plex Mono'" }}>{typeof v === "number" ? v.toFixed(1) : v}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {info.codelist_values?.length > 0 && (
-            <div style={{ marginTop: "6px", fontSize: "10px", color: "#1a4030" }}>
-              Spec codelist: {info.codelist_values.join(", ")}
-            </div>
-          )}
-
-          {info.note && <div style={{ marginTop: "4px", fontSize: "10px", color: "#3a5020" }}>ℹ {info.note}</div>}
-        </div>
-      ))}
-
-      {/* Notes */}
       {notes.length > 0 && (
-        <div style={{ padding: "10px 14px", background: "#100e06", border: "1px solid #2a2008", borderRadius: "5px" }}>
-          {notes.map((n, i) => <div key={i} style={{ fontSize: "10px", color: "#906030", marginBottom: "2px" }}>ℹ {n}</div>)}
+        <div style={{ padding: "8px 12px", background: "#0e0e06", border: "1px solid #222008", borderRadius: "5px" }}>
+          {notes.map((n, i) => (
+            <div key={i} style={{ fontSize: "10px", color: "#806030", marginBottom: i < notes.length - 1 ? "3px" : 0 }}>
+              ℹ {n}
+            </div>
+          ))}
         </div>
       )}
     </div>

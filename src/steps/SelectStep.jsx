@@ -27,9 +27,12 @@ export default function SelectStep({
       {appMode === "upload" && (
         <div style={{ marginBottom: "28px", paddingBottom: "28px", borderBottom: "1px solid #1a2d45" }}>
           <h2 style={{ fontFamily: "'IBM Plex Sans'", fontSize: "18px", fontWeight: 600, color: "#d0e8f8", marginBottom: "6px" }}>Upload Files</h2>
-          <p style={{ fontSize: "11px", color: "#3a6a8a", lineHeight: 1.7, marginBottom: "20px" }}>
+          <p style={{ fontSize: "11px", color: "#3a6a8a", lineHeight: 1.7, marginBottom: "16px" }}>
             Upload ADaM datasets and/or table shells. Supported: CSV, XLSX, XPT, ZIP (auto-extracts), TXT/RTF shells.
           </p>
+
+          {/* ── Privacy notice ── */}
+          <PrivacyNotice />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
@@ -227,6 +230,84 @@ PROC EXPORT DATA=adsl OUTFILE='adsl.csv' DBMS=CSV REPLACE; RUN;`}</pre>
           <button className="btn-primary" onClick={onRunIngestion} disabled={loading}>
             {loading ? <span className="pulse">⟳ Parsing...</span> : "▶ Run Ingestion Agent →"}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Privacy Notice ───────────────────────────────────────────────────────────
+function PrivacyNotice() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div style={{
+      marginBottom: "20px",
+      border: "1px solid #0d2a1a",
+      borderRadius: "6px",
+      background: "#050f0a",
+      overflow: "hidden",
+    }}>
+      {/* Header — always visible */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "10px",
+          padding: "10px 14px", background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: "13px" }}>🔒</span>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "#30a060", fontFamily: "'IBM Plex Mono'", letterSpacing: ".04em" }}>
+          PRIVACY PROTECTED — Data values never leave your browser
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: "10px", color: "#1a5030" }}>
+          {collapsed ? "▶ details" : "▼ hide"}
+        </span>
+      </button>
+
+      {/* Detail rows — collapsible */}
+      {!collapsed && (
+        <div style={{ padding: "0 14px 14px 14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+            <div>
+              <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4a28", marginBottom: "6px" }}>
+                ✓ SENT TO ANTHROPIC API
+              </div>
+              {[
+                "Table shell text",
+                "Variable names & types",
+                "Row counts per dataset",
+                "Aggregate statistics (mean, SD, min, max)",
+                "ADaM spec labels & codelist names",
+              ].map(item => (
+                <div key={item} style={{ fontSize: "10.5px", color: "#2a7040", display: "flex", gap: "6px", marginBottom: "3px" }}>
+                  <span style={{ color: "#1a5030", flexShrink: 0 }}>→</span> {item}
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#4a1a1a", marginBottom: "6px" }}>
+                ✗ NEVER SENT TO API
+              </div>
+              {[
+                "Individual patient records",
+                "Actual data values (USUBJID, dates, results)",
+                "Unique value lists",
+                "Raw dataset rows",
+                "Any personally identifiable information",
+              ].map(item => (
+                <div key={item} style={{ fontSize: "10.5px", color: "#703030", display: "flex", gap: "6px", marginBottom: "3px" }}>
+                  <span style={{ color: "#5a2020", flexShrink: 0 }}>✗</span> {item}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ fontSize: "10px", color: "#1a4028", lineHeight: 1.6, borderTop: "1px solid #0d2a1a", paddingTop: "8px" }}>
+            All computation (unique value counts, statistics, code execution) runs locally in your browser.
+            Only structural metadata is shared with Claude to generate code.
+            Review your organisation's data governance policy before uploading real trial data.
+          </div>
         </div>
       )}
     </div>
