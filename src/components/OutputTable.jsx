@@ -1,6 +1,6 @@
 // ─── TLF Output Table ─────────────────────────────────────────────────────────
-// For Python runs: renders raw OUTPUT_HTML via dangerouslySetInnerHTML
-// For R runs:      renders a JS-built simulated preview table
+// If outputHtml is set (from Pyodide or WebR live execution): renders it directly.
+// Otherwise falls back to a JS-built preview table.
 
 export function buildOutputTable(shell, meta, adamDatasets) {
   const allData = Object.values(adamDatasets)[0]?.data || [];
@@ -47,43 +47,58 @@ export function buildOutputTable(shell, meta, adamDatasets) {
 
   return {
     title: shell.title, id: shell.id, headers, rows,
-    footnotes: meta?.footnotes?.length ? meta.footnotes : ["Generated from uploaded data."],
+    footnotes: meta?.footnotes?.length ? meta.footnotes : [],
   };
 }
 
+// ─── Inline styles injected for outputHtml content ────────────────────────────
+const LIVE_TABLE_STYLES = `
+  .tlf-table, table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+  .tlf-table caption, caption { text-align: left; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; color: #c0d8f0; font-weight: 500; padding-bottom: 10px; caption-side: top; }
+  .tlf-table th, th { background: #07101e; color: #5890b0; font-weight: 500; padding: 8px 14px; text-align: center; border-bottom: 2px solid #1a2e48; white-space: pre-line; font-size: 11px; }
+  .tlf-table th:first-child, th:first-child { text-align: left; }
+  .tlf-table td, td { padding: 5px 14px; border-bottom: 1px solid #0d1828; color: #90b0c8; font-size: 11.5px; }
+  .tlf-table td:first-child, td:first-child { text-align: left; }
+  .tlf-table td:not(:first-child), td:not(:first-child) { text-align: center; color: #a8c4d8; }
+  .tlf-table tr:hover td, tr:hover td { background: #07101e; }
+  p.footnote, .footnote { font-size: 10px; color: #2a5a70; margin-top: 8px; border-top: 1px solid #1a2e48; padding-top: 8px; }
+`;
+
 // ─── Rendered output component ────────────────────────────────────────────────
-export default function OutputTable({ language, outputTable, outputHtml }) {
-  // Python: render the HTML produced by the generated Python code
-  if (language === "python" && outputHtml) {
+export default function OutputTable({ language, outputTable, outputHtml, compact }) {
+  // Live execution HTML (Python/Pyodide or R/WebR) — render directly
+  if (outputHtml) {
+    const runtimeLabel = language === "python" ? "Python · Pyodide" : "R · WebR";
+    const runtimeBadgeStyle = language === "python"
+      ? { background: "#062010", color: "#30b060", border: "1px solid #0c3820" }
+      : { background: "#071020", color: "#30a0e0", border: "1px solid #0c2840" };
     return (
-      <div className="card" style={{ padding: "24px", marginBottom: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px", paddingBottom: "12px", borderBottom: "2px solid #1e3a5f" }}>
-          <span className="badge b-ok" style={{ background: "#0a2510", color: "#40d060", border: "1px solid #1a5030" }}>● LIVE EXECUTION</span>
-          <span style={{ fontSize: "11px", color: "#3a6a8a" }}>Output rendered from Python (Pyodide) execution</span>
-        </div>
-        <style>{`
-          .tlf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          .tlf-table th { background: #0a1525; color: #7ab0d0; font-weight: 500; padding: 8px 14px; text-align: center; border-bottom: 2px solid #1e3a5f; white-space: pre-line; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-          .tlf-table th:first-child { text-align: left; }
-          .tlf-table td { padding: 6px 14px; border-bottom: 1px solid #111d2e; color: #b0c8d8; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
-          .tlf-table tr:hover td { background: #0a1525; }
-        `}</style>
+      <div className={compact ? "" : "card"} style={{ padding: compact ? 0 : "24px", marginBottom: compact ? 0 : "16px" }}>
+        {!compact && (
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px", paddingBottom: "12px", borderBottom: "1px solid #121e30" }}>
+            <span className="badge" style={runtimeBadgeStyle}>● LIVE EXECUTION</span>
+            <span style={{ fontSize: "11px", color: "#2a5070" }}>Output from {runtimeLabel}</span>
+          </div>
+        )}
+        <style>{LIVE_TABLE_STYLES}</style>
         <div dangerouslySetInnerHTML={{ __html: outputHtml }} />
       </div>
     );
   }
 
-  // R / fallback: render the JS-built simulated table
+  // JS-built fallback preview (used when live execution result isn't available)
   if (!outputTable) return null;
   return (
-    <div className="card" style={{ padding: "24px", marginBottom: "16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px", paddingBottom: "12px", borderBottom: "2px solid #1e3a5f" }}>
-        <div style={{ textAlign: "left", flex: 1 }}>
-          <div style={{ fontSize: "10px", color: "#3a6a8a", marginBottom: "3px" }}>{outputTable.id}</div>
-          <div style={{ fontFamily: "'IBM Plex Sans'", fontSize: "14px", color: "#c0d8f0", fontWeight: 500 }}>{outputTable.title}</div>
+    <div className={compact ? "" : "card"} style={{ padding: compact ? 0 : "24px", marginBottom: compact ? 0 : "16px" }}>
+      {!compact && (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px", paddingBottom: "12px", borderBottom: "1px solid #121e30" }}>
+          <div style={{ textAlign: "left", flex: 1 }}>
+            <div style={{ fontSize: "10px", color: "#2a5070", marginBottom: "3px" }}>{outputTable.id}</div>
+            <div style={{ fontFamily: "'IBM Plex Sans'", fontSize: "14px", color: "#b8d4ee", fontWeight: 500 }}>{outputTable.title}</div>
+          </div>
+          <span className="badge" style={{ background: "#120e04", color: "#b09030", border: "1px solid #302808" }}>PREVIEW</span>
         </div>
-        <span className="badge" style={{ background: "#1a1500", color: "#d0a030", border: "1px solid #4a3500" }}>SIMULATED PREVIEW</span>
-      </div>
+      )}
       <table className="tlf-table">
         <thead>
           <tr>{outputTable.headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
@@ -91,7 +106,7 @@ export default function OutputTable({ language, outputTable, outputHtml }) {
         <tbody>
           {outputTable.rows.map((row, i) => (
             <tr key={i} className={row.isHeader ? "hdr" : ""}>
-              <td style={{ color: row.isHeader ? "#5090b8" : "#90b0c8" }}>{row.label}</td>
+              <td style={{ color: row.isHeader ? "#3a7898" : "#8ab0c8" }}>{row.label}</td>
               {!row.isHeader && row.vals?.map((v, j) => <td key={j} className="val">{v}</td>)}
               {row.isHeader && <td colSpan={outputTable.headers.length - 1} />}
             </tr>
@@ -99,13 +114,10 @@ export default function OutputTable({ language, outputTable, outputHtml }) {
         </tbody>
       </table>
       {outputTable.footnotes?.map((fn, i) => (
-        <div key={i} style={{ marginTop: i === 0 ? "12px" : "2px", paddingTop: i === 0 ? "10px" : 0, borderTop: i === 0 ? "1px solid #1a2d45" : "none", fontSize: "10px", color: "#2a5a7a" }}>
-          Note: {fn}
+        <div key={i} style={{ marginTop: i === 0 ? "12px" : "3px", paddingTop: i === 0 ? "10px" : 0, borderTop: i === 0 ? "1px solid #121e30" : "none", fontSize: "10px", color: "#2a5070" }}>
+          {fn}
         </div>
       ))}
-      <div style={{ marginTop: "12px", fontSize: "10px", color: "#4a3a0a", padding: "8px 12px", background: "#1a1200", border: "1px solid #3a2800", borderRadius: "4px" }}>
-        ℹ Run the R program in your local R environment for the official output.
-      </div>
     </div>
   );
 }

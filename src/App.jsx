@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { SAMPLE_ADAM_DATASETS, SAMPLE_TABLE_SHELLS } from "./config/sampleData.js";
 import { parseUploadedFile } from "./parsers/fileDispatcher.js";
+import { parseSpecBuffer } from "./parsers/specParser.js";
 import { runIngestionAgent } from "./agents/ingestionAgent.js";
+import { runDataAnalystAgent } from "./agents/dataAnalystAgent.js";
 import { runCodeGenAgent } from "./agents/codeGenAgent.js";
 import { runQcAgent } from "./agents/qcAgent.js";
 import { buildOutputTable } from "./components/OutputTable.jsx";
@@ -17,63 +19,105 @@ import OutputStep from "./steps/OutputStep.jsx";
 const GLOBAL_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#0d1321}::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:3px}
-.btn-primary{background:linear-gradient(135deg,#0066cc,#0044aa);color:#e0f0ff;border:1px solid #0088ff40;padding:10px 22px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;transition:all .2s}
-.btn-primary:hover{background:linear-gradient(135deg,#0077ee,#0055bb);box-shadow:0 0 16px #0066cc60}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed}
-.btn-ghost{background:transparent;color:#7a9ab8;border:1px solid #1e3a5f;padding:8px 18px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s}
-.btn-ghost:hover{border-color:#3a6a9f;color:#a0c0d8}
-.btn-mode{background:transparent;border:none;padding:7px 14px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:.08em;transition:all .2s}
-.btn-mode.active{background:#0a2040;color:#4fc3f7;border:1px solid #0066cc}
-.btn-mode.inactive{color:#3a6a8a;border:1px solid transparent}
-.card{background:#0d1321;border:1px solid #1a2d45;border-radius:6px}
-.shell-card{background:#0d1321;border:1px solid #1a2d45;border-radius:6px;padding:14px 16px;cursor:pointer;transition:all .2s}
-.shell-card:hover{border-color:#0066cc;background:#0f1828}
-.shell-card.selected{border-color:#0088ff;background:#0a1a30;box-shadow:0 0 20px #0066cc20}
-.shell-card.up{border-color:#1a4a2a}.shell-card.up:hover{border-color:#00cc66}.shell-card.up.selected{border-color:#00ff88}
-.log-line{font-size:11px;padding:2px 0;font-family:'IBM Plex Mono',monospace;line-height:1.6}
-.log-agent{color:#4fc3f7}.log-success{color:#66bb6a}.log-error{color:#ef5350}.log-info{color:#90a4ae}
-.step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
-.step-active{background:#0066cc;color:white;box-shadow:0 0 12px #0066cc80}
-.step-done{background:#1a3a1a;color:#66bb6a;border:1px solid #2a5a2a}
-.step-pending{background:#0d1321;color:#3a5a7a;border:1px solid #1a2d45}
-.code-pre{background:#06080f;border:1px solid #1a2d45;border-radius:4px;padding:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#a8c8e8;overflow:auto;white-space:pre;line-height:1.7;max-height:440px}
-.tlf-table{width:100%;border-collapse:collapse;font-size:12px}
-.tlf-table th{background:#0a1525;color:#7ab0d0;font-weight:500;padding:8px 14px;text-align:center;border-bottom:2px solid #1e3a5f;white-space:pre-line;font-family:'IBM Plex Mono',monospace;font-size:11px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#080c18}
+::-webkit-scrollbar-thumb{background:#1a3050;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#2a4a70}
+
+/* Buttons */
+.btn-primary{background:linear-gradient(135deg,#0060cc,#003fa0);color:#d8eeff;border:1px solid #0077ee40;padding:10px 24px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;transition:all .2s;box-shadow:0 1px 4px #00204080}
+.btn-primary:hover:not(:disabled){background:linear-gradient(135deg,#0070dd,#004db0);box-shadow:0 0 18px #0066cc50,0 2px 6px #00204080;border-color:#0088ff60}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed}
+.btn-ghost{background:transparent;color:#6a8aaa;border:1px solid #1a3050;padding:8px 18px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s}
+.btn-ghost:hover{border-color:#2a5080;color:#90b0cc;background:#060e1a}
+.btn-mode{background:transparent;border:none;padding:6px 13px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:.08em;transition:all .2s}
+.btn-mode.active{background:#071828;color:#4fc3f7;border:1px solid #0055aa;box-shadow:inset 0 1px 2px #00204060}
+.btn-mode.inactive{color:#2a5070;border:1px solid transparent}
+.btn-mode.inactive:hover{color:#4a8090;background:#060e18}
+
+/* Cards */
+.card{background:#090d1c;border:1px solid #162035;border-radius:7px;box-shadow:0 1px 3px #00102040}
+.shell-card{background:#090d1c;border:1px solid #162035;border-radius:7px;padding:14px 16px;cursor:pointer;transition:all .22s;position:relative}
+.shell-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:7px 0 0 7px;background:transparent;transition:background .22s}
+.shell-card:hover{border-color:#1a4070;background:#0a1220}
+.shell-card:hover::before{background:#1a4070}
+.shell-card.selected{border-color:#0077ee;background:#071828;box-shadow:0 0 22px #0055cc25}
+.shell-card.selected::before{background:#0077ee}
+.shell-card.up{border-color:#1a4030}.shell-card.up:hover{border-color:#20804a}.shell-card.up.selected{border-color:#00cc66}
+.shell-card.up::before{background:#1a4030}.shell-card.up.selected::before{background:#00cc66}
+
+/* Logs */
+.log-line{font-size:10.5px;padding:1.5px 0;font-family:'IBM Plex Mono',monospace;line-height:1.65}
+.log-agent{color:#38b0e8}.log-success{color:#56a866}.log-error{color:#d94040}.log-info{color:#607a8a}
+
+/* Step indicators */
+.step-dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.step-active{background:linear-gradient(135deg,#0066cc,#004499);color:white;box-shadow:0 0 0 3px #0066cc30,0 0 10px #0066cc60}
+.step-done{background:#0d2010;color:#56b866;border:1px solid #1a4025}
+.step-pending{background:#080c18;color:#253a50;border:1px solid #111e30}
+
+/* Code */
+.code-pre{background:#050810;border:1px solid #111e30;border-radius:5px;padding:16px 18px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#90b8d8;overflow:auto;white-space:pre;line-height:1.75;max-height:460px}
+
+/* TLF Table */
+.tlf-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'IBM Plex Mono',monospace}
+.tlf-table caption{text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:#c0d8f0;font-weight:500;padding-bottom:10px;caption-side:top}
+.tlf-table th{background:#07101e;color:#6098b8;font-weight:500;padding:8px 14px;text-align:center;border-bottom:2px solid #1a2e48;white-space:pre-line;font-size:11px;letter-spacing:.02em}
 .tlf-table th:first-child{text-align:left}
-.tlf-table td{padding:6px 14px;border-bottom:1px solid #111d2e;color:#b0c8d8;font-family:'IBM Plex Mono',monospace;font-size:11.5px}
-.tlf-table td.val{text-align:center}
-.tlf-table tr.hdr td{color:#5090b8;font-weight:600;padding-top:12px}
-.tlf-table tr:hover td{background:#0a1525}
-.pulse{animation:pulse 1.5s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.tlf-table td{padding:5px 14px;border-bottom:1px solid #0e1928;color:#9ab8cc;font-size:11.5px}
+.tlf-table td.val{text-align:center;color:#b0cce0}
+.tlf-table tr.hdr td{color:#4080a8;font-weight:600;padding-top:13px;padding-bottom:3px;background:#06090f}
+.tlf-table tr:last-child td{border-bottom:2px solid #1a2e48}
+.tlf-table tr:hover:not(.hdr) td{background:#07101e}
+
+/* Badges */
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:500;letter-spacing:.05em}
-.b-tbl{background:#0a2040;color:#4090c0;border:1px solid #1a4060}
-.b-ok{background:#0a2010;color:#40c060;border:1px solid #1a4030}
-.b-up{background:#0a2a1a;color:#40d090;border:1px solid #1a5a3a}
-.b-smp{background:#1a1a0a;color:#c0a040;border:1px solid #3a3a1a}
-.tab-btn{padding:7px 16px;font-size:11px;cursor:pointer;background:transparent;border:none;font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;transition:all .15s}
-.tab-btn.on{color:#4fc3f7;border-bottom:2px solid #4fc3f7}
-.tab-btn.off{color:#3a5a7a;border-bottom:2px solid transparent}
-.tab-btn:hover{color:#7ab8d8}
-.mg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.mi{background:#06080f;border:1px solid #1a2d45;border-radius:4px;padding:12px}
-.ml{font-size:9px;letter-spacing:.1em;color:#3a6a8a;text-transform:uppercase;margin-bottom:4px}
-.mv{font-size:12px;color:#90c0d8}
-.arow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:4px;margin-bottom:6px;font-size:11px}
-.aok{background:#0a1a0a;border:1px solid #1a3a1a}
-.afail{background:#1a0a0a;border:1px solid #3a1a1a}
-.lbar{height:2px;background:linear-gradient(90deg,#0066cc,#00aaff,#0066cc);background-size:200% 100%;animation:slide 1.5s linear infinite;border-radius:1px}
-@keyframes slide{0%{background-position:0%}100%{background-position:200%}}
-.ds-chip{display:inline-flex;align-items:center;gap:6px;background:#0a1828;border:1px solid #1a3a5a;border-radius:4px;padding:5px 10px;font-size:11px;font-family:'IBM Plex Mono',monospace}
-.ds-rm{background:transparent;border:none;color:#ef5350;cursor:pointer;font-size:14px;line-height:1;padding:0}
-.ds-rm:hover{color:#ff6666}
-.ulok{font-size:11px;color:#66bb6a;font-family:'IBM Plex Mono';padding:2px 0}
-.ulerr{font-size:11px;color:#ef5350;font-family:'IBM Plex Mono';padding:2px 0;white-space:pre-wrap}
-textarea:focus{border-color:#0066cc !important;box-shadow:0 0 0 2px #0066cc20}
+.b-tbl{background:#071828;color:#3888b8;border:1px solid #0d3050}
+.b-ok{background:#071a0a;color:#3aaa50;border:1px solid #0d3515}
+.b-up{background:#082015;color:#30b878;border:1px solid #0c4030}
+.b-smp{background:#141006;color:#b09030;border:1px solid #302808}
+
+/* Tabs */
+.tab-btn{padding:8px 17px;font-size:11px;cursor:pointer;background:transparent;border:none;font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;transition:all .15s;border-bottom:2px solid transparent}
+.tab-btn.on{color:#4fc3f7;border-bottom-color:#4fc3f7}
+.tab-btn.off{color:#2a4a60}
+.tab-btn.off:hover{color:#5a8aaa}
+
+/* Metadata grid */
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mi{background:#050810;border:1px solid #111e30;border-radius:5px;padding:12px}
+.ml{font-size:9px;letter-spacing:.12em;color:#2a5070;text-transform:uppercase;margin-bottom:5px}
+.mv{font-size:12px;color:#7ab0cc}
+
+/* QC attempt rows */
+.arow{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:5px;margin-bottom:6px;font-size:11px}
+.aok{background:#07120a;border:1px solid #143020}
+.afail{background:#120808;border:1px solid #301414}
+
+/* Loading bar */
+.lbar{height:2px;background:linear-gradient(90deg,#004499,#0088ff,#00aaff,#004499);background-size:300% 100%;animation:slide 1.8s linear infinite;border-radius:1px}
+@keyframes slide{0%{background-position:0%}100%{background-position:300%}}
+
+/* Dataset chips */
+.ds-chip{display:inline-flex;align-items:center;gap:6px;background:#07101e;border:1px solid #142840;border-radius:4px;padding:5px 10px;font-size:11px;font-family:'IBM Plex Mono',monospace}
+.ds-rm{background:transparent;border:none;color:#cc3030;cursor:pointer;font-size:14px;line-height:1;padding:0}
+.ds-rm:hover{color:#ee5050}
+.ulok{font-size:11px;color:#56a866;font-family:'IBM Plex Mono';padding:2px 0}
+.ulerr{font-size:11px;color:#d94040;font-family:'IBM Plex Mono';padding:2px 0;white-space:pre-wrap}
+
+/* Compare view */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #162035;border-radius:7px;overflow:hidden}
+.compare-pane{display:flex;flex-direction:column;overflow:hidden}
+.compare-pane-header{padding:10px 16px;border-bottom:1px solid #162035;display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;color:#2a5070;background:#060a14;flex-shrink:0}
+.compare-pane-body{flex:1;overflow:auto;padding:16px}
+.compare-divider{width:1px;background:#162035;flex-shrink:0}
+
+textarea:focus{border-color:#0066cc !important;box-shadow:0 0 0 2px #0066cc18}
 input:focus{border-color:#0066cc !important;outline:none}
-input::placeholder{color:#1e3a5a}
-textarea::placeholder{color:#1e3a5a;line-height:1.8}
+input::placeholder{color:#152535}
+textarea::placeholder{color:#152535;line-height:1.8}
 `;
 
 const STEPS = ["select", "parse", "generate", "execute", "output"];
@@ -89,11 +133,13 @@ export default function App() {
   const [uploadedShells, setUploadedShells] = useState([]);
   const [uploadLog, setUploadLog] = useState([]);
   const [uploadProcessing, setUploadProcessing] = useState(false);
+  const [adamSpec, setAdamSpec] = useState(null); // parsed ADaM spec file
 
   // ── Workflow state ──
   const [step, setStep] = useState("select");
   const [selectedShell, setSelectedShell] = useState(null);
   const [parsedMeta, setParsedMeta] = useState(null);
+  const [analystFindings, setAnalystFindings] = useState(null);
   const [rCode, setRCode] = useState("");
   const [pyCode, setPyCode] = useState("");
   const [qcAttempts, setQcAttempts] = useState([]);
@@ -102,7 +148,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [agentLogs, setAgentLogs] = useState([]);
-  const [pyodideLoading, setPyodideLoading] = useState(false);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeLoadingMsg, setRuntimeLoadingMsg] = useState("");
 
   // ── Active data ──
   const adamDatasets =
@@ -168,12 +215,26 @@ export default function App() {
     setUploadProcessing(false);
   }
 
+  // ── Spec file handler ──
+  async function handleSpecFile(file) {
+    setUploadProcessing(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const spec = parseSpecBuffer(new Uint8Array(buf), file.name);
+      setAdamSpec(spec);
+      setUploadLog(prev => [{ ok: true, msg: `✓ ${file.name} → ${spec.variables.length} variables, ${Object.keys(spec.codelists).length} codelists` }, ...prev]);
+    } catch (e) {
+      setUploadLog(prev => [{ ok: false, msg: `✗ ${file.name}: ${e.message}` }, ...prev]);
+    }
+    setUploadProcessing(false);
+  }
+
   // ── Workflow steps ──
   async function handleParse() {
     setLoading(true);
     setLoadingMsg("Ingestion Agent parsing table shell and ADaM spec...");
     try {
-      const meta = await runIngestionAgent({ shell: selectedShell, adamDatasets, addLog });
+      const meta = await runIngestionAgent({ shell: selectedShell, adamDatasets, adamSpec, addLog });
       setParsedMeta(meta);
       setStep("parse");
     } catch (e) { addLog("error", `Parse failed: ${e.message}`); }
@@ -182,9 +243,18 @@ export default function App() {
 
   async function handleGenerate() {
     setLoading(true);
-    setLoadingMsg("Code Generation Agent synthesizing R + Python programs...");
+    setAnalystFindings(null);
     try {
-      const { rCode: r, pyCode: py } = await runCodeGenAgent({ parsedMeta, adamDatasets, addLog });
+      // Step 1: Data Analyst Agent — tool-use exploration of actual data
+      setLoadingMsg("Data Analyst Agent exploring datasets...");
+      const findings = await runDataAnalystAgent({ parsedMeta, adamDatasets, adamSpec, addLog });
+      setAnalystFindings(findings);
+
+      // Step 2: Code Generation Agent — uses analyst findings for accurate code
+      setLoadingMsg("Code Generation Agent synthesizing R + Python programs...");
+      const { rCode: r, pyCode: py } = await runCodeGenAgent({
+        parsedMeta, adamDatasets, adamSpec, analystFindings: findings, addLog,
+      });
       setRCode(r);
       setPyCode(py);
       setLangChangedWarning(false);
@@ -197,23 +267,26 @@ export default function App() {
     setLoading(true);
     setQcAttempts([]);
     setStep("execute");
-    setPyodideLoading(false);
+    setRuntimeLoading(false);
+    setRuntimeLoadingMsg("");
 
     const result = await runQcAgent({
       language,
       rCode,
       pyCode,
       parsedMeta,
+      adamDatasets,
       addLog,
       setLoadingMsg,
       setQcAttempts,
-      onPyodideLoading: msg => {
-        setPyodideLoading(true);
+      onRuntimeLoading: msg => {
+        setRuntimeLoading(true);
+        setRuntimeLoadingMsg(msg);
         setLoadingMsg(msg);
       },
     });
 
-    setPyodideLoading(false);
+    setRuntimeLoading(false);
 
     if (result.success) {
       setRCode(result.finalRCode);
@@ -229,13 +302,14 @@ export default function App() {
     setStep("select"); setSelectedShell(null); setParsedMeta(null);
     setRCode(""); setPyCode(""); setQcAttempts([]);
     setOutputTable(null); setOutputHtml(null);
+    setAnalystFindings(null);
     setAgentLogs([]); setLangChangedWarning(false);
   }
 
   function fullReset() {
     resetWorkflow();
     setUploadedDatasets({}); setUploadedShells([]);
-    setUploadLog([]); setAppMode("sample");
+    setUploadLog([]); setAdamSpec(null); setAppMode("sample");
   }
 
   const codeReady = step !== "select" && step !== "parse";
@@ -259,6 +333,7 @@ export default function App() {
           uploadedDatasets={uploadedDatasets}
           uploadedShells={uploadedShells}
           agentLogs={agentLogs}
+          adamSpec={adamSpec}
         />
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
@@ -289,6 +364,7 @@ export default function App() {
               onRunIngestion={handleParse}
               onDatasetFiles={handleDatasetFiles}
               onShellFiles={handleShellFiles}
+              adamSpec={adamSpec} onSpecFile={handleSpecFile}
             />
           )}
 
@@ -309,6 +385,7 @@ export default function App() {
               language={language}
               loading={loading}
               onRunExecute={handleExecute}
+              analystFindings={analystFindings}
             />
           )}
 
@@ -318,7 +395,8 @@ export default function App() {
               qcAttempts={qcAttempts}
               finalRCode={rCode} finalPyCode={pyCode}
               language={language}
-              pyodideLoading={pyodideLoading}
+              runtimeLoading={runtimeLoading}
+              runtimeLoadingMsg={runtimeLoadingMsg}
             />
           )}
 

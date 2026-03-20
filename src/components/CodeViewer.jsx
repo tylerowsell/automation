@@ -1,8 +1,14 @@
 // ─── Syntax-highlighted code display with tab switcher ───────────────────────
+const BADGE_STYLES = {
+  green: { background: "#0a2510", color: "#40d060", border: "1px solid #1a5030" },
+  blue:  { background: "#071828", color: "#3090d0", border: "1px solid #0d3050" },
+  grey:  { background: "#141414", color: "#606060", border: "1px solid #282828" },
+};
+
 export default function CodeViewer({ tabs, activeTab, onTabChange, children }) {
   return (
     <div>
-      <div style={{ borderBottom: "1px solid #1a2d45", marginBottom: "14px", display: "flex" }}>
+      <div style={{ borderBottom: "1px solid #121e30", marginBottom: "14px", display: "flex", gap: "2px" }}>
         {tabs.map(({ key, label, badge }) => (
           <button
             key={key}
@@ -12,12 +18,7 @@ export default function CodeViewer({ tabs, activeTab, onTabChange, children }) {
           >
             {label}
             {badge && (
-              <span style={{
-                fontSize: "9px", padding: "1px 6px", borderRadius: "3px",
-                background: badge.color === "green" ? "#0a2510" : "#1a1a1a",
-                color: badge.color === "green" ? "#40d060" : "#707070",
-                border: `1px solid ${badge.color === "green" ? "#1a5030" : "#2a2a2a"}`,
-              }}>
+              <span style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "3px", ...(BADGE_STYLES[badge.color] || BADGE_STYLES.grey) }}>
                 {badge.label}
               </span>
             )}

@@ -2,15 +2,15 @@ import { useRef, useEffect } from "react";
 
 const STEPS = ["select", "parse", "generate", "execute", "output"];
 const STEP_LABELS = [
-  ["select", "Select Shell"],
-  ["parse", "Parse & Ingest"],
+  ["select",   "Select Shell"],
+  ["parse",    "Parse & Ingest"],
   ["generate", "Generate Code"],
-  ["execute", "QC & Execute"],
-  ["output", "Review Output"],
+  ["execute",  "QC & Execute"],
+  ["output",   "Review Output"],
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShells, agentLogs }) {
+export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShells, agentLogs, adamSpec }) {
   const logsEndRef = useRef(null);
   const stepIdx = STEPS.indexOf(step);
 
@@ -19,48 +19,72 @@ export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShell
   }, [agentLogs]);
 
   return (
-    <div style={{ width: "240px", flexShrink: 0, borderRight: "1px solid #1a2d45", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{
+      width: "232px", flexShrink: 0,
+      borderRight: "1px solid #121c2e",
+      display: "flex", flexDirection: "column",
+      overflow: "hidden",
+      background: "#050810",
+    }}>
       {/* Workflow steps */}
-      <div style={{ padding: "18px 16px", borderBottom: "1px solid #1a2d45" }}>
-        <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "#2a4a6a", marginBottom: "12px" }}>WORKFLOW</div>
+      <div style={{ padding: "18px 16px", borderBottom: "1px solid #121c2e" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "0.14em", color: "#1a3050", marginBottom: "14px", fontFamily: "'IBM Plex Mono'" }}>
+          WORKFLOW
+        </div>
         {STEP_LABELS.map(([id, label], i) => {
           const idx = STEPS.indexOf(id);
           const isDone = stepIdx > idx;
           const isActive = stepIdx === idx;
           return (
-            <div key={id} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <div key={id} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
               <div className={`step-dot ${isActive ? "step-active" : isDone ? "step-done" : "step-pending"}`}>
                 {isDone ? "✓" : i + 1}
               </div>
-              <span style={{ fontSize: "11px", color: isActive ? "#c0d8f0" : isDone ? "#66bb6a" : "#2a4a6a" }}>{label}</span>
+              <div>
+                <div style={{
+                  fontSize: "11px",
+                  fontFamily: "'IBM Plex Mono'",
+                  color: isActive ? "#b0d0ee" : isDone ? "#3a9050" : "#1e3a50",
+                  fontWeight: isActive ? 500 : 400,
+                }}>
+                  {label}
+                </div>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Upload status (upload mode only) */}
+      {/* Upload status */}
       {appMode === "upload" && (
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid #1a2d45" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "#2a4a6a", marginBottom: "6px" }}>UPLOADED</div>
-          <div style={{ fontSize: "11px", color: Object.keys(uploadedDatasets).length > 0 ? "#66bb6a" : "#3a5a7a" }}>
-            {Object.keys(uploadedDatasets).length > 0 ? `● ${Object.keys(uploadedDatasets).length} dataset(s)` : "○ No datasets"}
-          </div>
-          <div style={{ fontSize: "11px", color: uploadedShells.length > 0 ? "#66bb6a" : "#3a5a7a", marginTop: "3px" }}>
-            {uploadedShells.length > 0 ? `● ${uploadedShells.length} shell(s)` : "○ No shells"}
-          </div>
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid #121c2e" }}>
+          <div style={{ fontSize: "9px", letterSpacing: ".12em", color: "#1a3050", marginBottom: "7px", fontFamily: "'IBM Plex Mono'" }}>LOADED FILES</div>
+          {[
+            [Object.keys(uploadedDatasets).length > 0, `${Object.keys(uploadedDatasets).length} dataset(s)`],
+            [uploadedShells.length > 0, `${uploadedShells.length} shell(s)`],
+            [!!adamSpec, adamSpec ? `spec: ${adamSpec.variables.length}v` : "no spec"],
+          ].map(([ok, label], i) => (
+            <div key={i} style={{ fontSize: "11px", color: ok ? "#3a9050" : "#1e3a50", marginBottom: "2px", fontFamily: "'IBM Plex Mono'" }}>
+              {ok ? "●" : "○"} {label}
+            </div>
+          ))}
         </div>
       )}
 
       {/* Agent logs */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "10px 16px 4px", fontSize: "9px", letterSpacing: "0.12em", color: "#2a4a6a" }}>AGENT LOGS</div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+        <div style={{ padding: "10px 16px 6px", fontSize: "9px", letterSpacing: ".12em", color: "#1a3050", fontFamily: "'IBM Plex Mono'", flexShrink: 0 }}>
+          AGENT LOGS
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 14px 16px" }}>
           {agentLogs.length === 0 && (
-            <div style={{ fontSize: "10px", color: "#1e3a5a", fontStyle: "italic" }}>Awaiting workflow...</div>
+            <div style={{ fontSize: "10px", color: "#121e30", fontStyle: "italic", fontFamily: "'IBM Plex Mono'" }}>
+              Awaiting workflow...
+            </div>
           )}
           {agentLogs.map((l, i) => (
             <div key={i} className={`log-line log-${l.type}`}>
-              <span style={{ color: "#1e3a5a", marginRight: 4 }}>{l.ts}</span>{l.msg}
+              <span style={{ color: "#111d2e", marginRight: 5 }}>{l.ts}</span>{l.msg}
             </div>
           ))}
           <div ref={logsEndRef} />
