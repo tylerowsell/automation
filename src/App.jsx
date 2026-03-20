@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { SAMPLE_ADAM_DATASETS, SAMPLE_TABLE_SHELLS } from "./config/sampleData.js";
 import { parseUploadedFile } from "./parsers/fileDispatcher.js";
+import { parseSpecBuffer } from "./parsers/specParser.js";
 import { runIngestionAgent } from "./agents/ingestionAgent.js";
+import { runDataAnalystAgent } from "./agents/dataAnalystAgent.js";
 import { runCodeGenAgent } from "./agents/codeGenAgent.js";
 import { runQcAgent } from "./agents/qcAgent.js";
 import { buildOutputTable } from "./components/OutputTable.jsx";
@@ -131,11 +133,13 @@ export default function App() {
   const [uploadedShells, setUploadedShells] = useState([]);
   const [uploadLog, setUploadLog] = useState([]);
   const [uploadProcessing, setUploadProcessing] = useState(false);
+  const [adamSpec, setAdamSpec] = useState(null); // parsed ADaM spec file
 
   // ── Workflow state ──
   const [step, setStep] = useState("select");
   const [selectedShell, setSelectedShell] = useState(null);
   const [parsedMeta, setParsedMeta] = useState(null);
+  const [analystFindings, setAnalystFindings] = useState(null);
   const [rCode, setRCode] = useState("");
   const [pyCode, setPyCode] = useState("");
   const [qcAttempts, setQcAttempts] = useState([]);
@@ -211,12 +215,26 @@ export default function App() {
     setUploadProcessing(false);
   }
 
+  // ── Spec file handler ──
+  async function handleSpecFile(file) {
+    setUploadProcessing(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const spec = parseSpecBuffer(new Uint8Array(buf), file.name);
+      setAdamSpec(spec);
+      setUploadLog(prev => [{ ok: true, msg: `✓ ${file.name} → ${spec.variables.length} variables, ${Object.keys(spec.codelists).length} codelists` }, ...prev]);
+    } catch (e) {
+      setUploadLog(prev => [{ ok: false, msg: `✗ ${file.name}: ${e.message}` }, ...prev]);
+    }
+    setUploadProcessing(false);
+  }
+
   // ── Workflow steps ──
   async function handleParse() {
     setLoading(true);
     setLoadingMsg("Ingestion Agent parsing table shell and ADaM spec...");
     try {
-      const meta = await runIngestionAgent({ shell: selectedShell, adamDatasets, addLog });
+      const meta = await runIngestionAgent({ shell: selectedShell, adamDatasets, adamSpec, addLog });
       setParsedMeta(meta);
       setStep("parse");
     } catch (e) { addLog("error", `Parse failed: ${e.message}`); }
@@ -225,9 +243,18 @@ export default function App() {
 
   async function handleGenerate() {
     setLoading(true);
-    setLoadingMsg("Code Generation Agent synthesizing R + Python programs...");
+    setAnalystFindings(null);
     try {
-      const { rCode: r, pyCode: py } = await runCodeGenAgent({ parsedMeta, adamDatasets, addLog });
+      // Step 1: Data Analyst Agent — tool-use exploration of actual data
+      setLoadingMsg("Data Analyst Agent exploring datasets...");
+      const findings = await runDataAnalystAgent({ parsedMeta, adamDatasets, adamSpec, addLog });
+      setAnalystFindings(findings);
+
+      // Step 2: Code Generation Agent — uses analyst findings for accurate code
+      setLoadingMsg("Code Generation Agent synthesizing R + Python programs...");
+      const { rCode: r, pyCode: py } = await runCodeGenAgent({
+        parsedMeta, adamDatasets, adamSpec, analystFindings: findings, addLog,
+      });
       setRCode(r);
       setPyCode(py);
       setLangChangedWarning(false);
@@ -275,13 +302,14 @@ export default function App() {
     setStep("select"); setSelectedShell(null); setParsedMeta(null);
     setRCode(""); setPyCode(""); setQcAttempts([]);
     setOutputTable(null); setOutputHtml(null);
+    setAnalystFindings(null);
     setAgentLogs([]); setLangChangedWarning(false);
   }
 
   function fullReset() {
     resetWorkflow();
     setUploadedDatasets({}); setUploadedShells([]);
-    setUploadLog([]); setAppMode("sample");
+    setUploadLog([]); setAdamSpec(null); setAppMode("sample");
   }
 
   const codeReady = step !== "select" && step !== "parse";
@@ -305,6 +333,7 @@ export default function App() {
           uploadedDatasets={uploadedDatasets}
           uploadedShells={uploadedShells}
           agentLogs={agentLogs}
+          adamSpec={adamSpec}
         />
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
@@ -335,6 +364,7 @@ export default function App() {
               onRunIngestion={handleParse}
               onDatasetFiles={handleDatasetFiles}
               onShellFiles={handleShellFiles}
+              adamSpec={adamSpec} onSpecFile={handleSpecFile}
             />
           )}
 
@@ -355,6 +385,7 @@ export default function App() {
               language={language}
               loading={loading}
               onRunExecute={handleExecute}
+              analystFindings={analystFindings}
             />
           )}
 

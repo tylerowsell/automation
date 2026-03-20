@@ -10,7 +10,7 @@ const STEP_LABELS = [
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShells, agentLogs }) {
+export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShells, agentLogs, adamSpec }) {
   const logsEndRef = useRef(null);
   const stepIdx = STEPS.indexOf(step);
 
@@ -59,16 +59,15 @@ export default function Sidebar({ step, appMode, uploadedDatasets, uploadedShell
       {appMode === "upload" && (
         <div style={{ padding: "10px 16px", borderBottom: "1px solid #121c2e" }}>
           <div style={{ fontSize: "9px", letterSpacing: ".12em", color: "#1a3050", marginBottom: "7px", fontFamily: "'IBM Plex Mono'" }}>LOADED FILES</div>
-          <div style={{ fontSize: "11px", color: Object.keys(uploadedDatasets).length > 0 ? "#3a9050" : "#1e3a50", marginBottom: "3px" }}>
-            {Object.keys(uploadedDatasets).length > 0
-              ? `● ${Object.keys(uploadedDatasets).length} dataset(s)`
-              : "○ No datasets"}
-          </div>
-          <div style={{ fontSize: "11px", color: uploadedShells.length > 0 ? "#3a9050" : "#1e3a50" }}>
-            {uploadedShells.length > 0
-              ? `● ${uploadedShells.length} shell(s)`
-              : "○ No shells"}
-          </div>
+          {[
+            [Object.keys(uploadedDatasets).length > 0, `${Object.keys(uploadedDatasets).length} dataset(s)`],
+            [uploadedShells.length > 0, `${uploadedShells.length} shell(s)`],
+            [!!adamSpec, adamSpec ? `spec: ${adamSpec.variables.length}v` : "no spec"],
+          ].map(([ok, label], i) => (
+            <div key={i} style={{ fontSize: "11px", color: ok ? "#3a9050" : "#1e3a50", marginBottom: "2px", fontFamily: "'IBM Plex Mono'" }}>
+              {ok ? "●" : "○"} {label}
+            </div>
+          ))}
         </div>
       )}
 

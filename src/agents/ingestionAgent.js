@@ -1,42 +1,58 @@
 import { callClaude } from "../config/apiConfig.js";
+import { specToContextString } from "../parsers/specParser.js";
 
 // ─── Ingestion Agent ──────────────────────────────────────────────────────────
-// Parses a table shell into structured metadata JSON that drives faithful code generation.
+// Parses a table shell + ADaM spec into structured metadata JSON.
+// The metadata drives the Data Analyst Agent and then Code Generation.
 
 const SYSTEM_PROMPT = `You are a clinical programming expert parsing regulatory TLF table shells.
-Extract PRECISE metadata — your output drives code generation that QC programmers compare against production outputs.
+Extract PRECISE metadata — your output drives agentic data analysis and code generation.
 Respond ONLY with a valid JSON object — no markdown, no explanation.
 
-Fields to extract:
-- output_id: table/listing ID exactly as written (e.g. "T-14.1.1")
+Fields:
+- output_id: table/listing ID verbatim (e.g. "T-14.1.1")
 - output_type: "table" | "listing" | "figure"
-- title: full title copied verbatim from the shell
+- title: full title copied verbatim
 - population: population description (e.g. "Safety Analysis Set")
-- population_filter: R expression (e.g. "SAFFL == 'Y'")
-- required_datasets: array of ADaM dataset names needed (e.g. ["ADSL", "ADAE"])
+- population_filter: R/Python filter expression (e.g. "SAFFL == 'Y'")
+- required_datasets: array of ADaM dataset names
 - merge_key: primary merge key (usually "USUBJID")
-- columns: array of treatment arm column objects. Each: { label, armcd }
-  - label: EXACT column header text from the shell (e.g. "Placebo\n(N=xx)")
-  - armcd: the ARMCD/TRT value this column corresponds to
-- spanning_header: any spanning header text above the treatment columns (or null)
-- row_groups: array of row group objects. Each:
+- columns: array of treatment column objects
+  { label, armcd }
+  label = EXACT column header text (e.g. "Placebo\\n(N=xx)")
+  armcd = corresponding ARMCD/ARM/TRT value
+- spanning_header: spanning header above treatment columns or null
+- row_groups: array of row-group objects:
   {
     group: group label (e.g. "Age (Years)"),
     indent: 0,
+    variable: primary ADaM variable for this group (e.g. "AGE"),
     rows: [
       {
-        label: exact row label from shell (e.g. "  n / Mean (SD)"),
+        label: exact row label from shell (preserve leading spaces for indentation),
         indent: 1,
-        stat: stat type — one of: "n_pct", "mean_sd", "median_minmax", "n_mean_sd", "n", "count", "custom",
-        variable: ADaM variable name for this row (e.g. "AGE", "AGEGR1", "AEBODSYS"),
-        format: exact format pattern from shell (e.g. "xx (xx.x%)", "xx / xx.x (x.x)", "xx.x / xx, xx")
+        stat: "n_pct" | "mean_sd" | "median_minmax" | "n_mean_sd" | "n" | "count",
+        variable: ADaM variable name,
+        format: exact format pattern (e.g. "xx (xx.x%)", "xx.x (x.x)", "xx / xx.x (x.x)"),
+        enumerate_dynamically: true | false
       }
     ]
   }
-- key_variables: all ADaM variables referenced
-- footnotes: array of footnote strings copied verbatim from the shell (empty array if none)`;
 
-export async function runIngestionAgent({ shell, adamDatasets, addLog }) {
+  IMPORTANT — enumerate_dynamically:
+  Set to TRUE when:
+    - The row is a section header indicating "all unique values of variable will be shown as sub-rows"
+    - The shell shows representative example values (e.g. shows "White", "Black" but RACE could have more)
+    - Any categorical variable where the full value set should come from the actual data
+  Set to FALSE when:
+    - The row represents a SPECIFIC pre-defined category that should always appear (e.g. "Male"/"Female")
+    - The row is a summary row (e.g. "n / Mean (SD)") — not a category row at all
+    - The value set is clinically fixed regardless of data (e.g. severity: Mild/Moderate/Severe)
+
+- key_variables: all ADaM variables referenced
+- footnotes: footnote strings copied verbatim (empty array if none)`;
+
+export async function runIngestionAgent({ shell, adamDatasets, adamSpec, addLog }) {
   addLog("agent", `[Ingestion Agent] Parsing ${shell.id}...`);
 
   const dsInfo =
@@ -50,9 +66,11 @@ export async function runIngestionAgent({ shell, adamDatasets, addLog }) {
       return `${k} (${v.data.length} rows): ${vars.join(", ")}`;
     }).join("\n");
 
+  const specContext = specToContextString(adamSpec, []);
+
   const raw = await callClaude(
     SYSTEM_PROMPT,
-    `TABLE SHELL:\n${shell.shell}\n\nADAM SPEC:\n${shell.adamSpec}\n\nAVAILABLE DATASETS:\n${dsInfo}`,
+    `TABLE SHELL:\n${shell.shell}\n\nADAM SPEC:\n${shell.adamSpec}\n\nAVAILABLE DATASETS:\n${dsInfo}\n\nUPLOADED ADAM SPEC:\n${specContext}`,
     2500
   );
 

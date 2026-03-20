@@ -1,49 +1,57 @@
 import { callClaude } from "../config/apiConfig.js";
+import { specToContextString } from "../parsers/specParser.js";
 
 // ─── Code Generation Agent ────────────────────────────────────────────────────
-// Generates BOTH R and Python programs in a single Claude API call.
-// R:      executable via WebR in the browser AND downloadable for offline use
-// Python: executable via Pyodide in the browser
+// Generates BOTH R and Python programs using:
+//   1. Parsed shell metadata (structure, column labels, row groups, formats)
+//   2. Data Analyst findings (actual unique values, stats, arm values)
+//   3. ADaM spec context (variable labels, codelists)
+//
+// R:      executable via WebR in browser + downloadable for local use
+// Python: executable via Pyodide in browser
 
-const SYSTEM_PROMPT = `You are an expert clinical programmer generating TLF code for QC comparison.
-A QC programmer will compare your output side-by-side against a production table — SHELL FIDELITY IS CRITICAL.
+const SYSTEM_PROMPT = `You are an expert clinical programmer. Generate production-quality TLF code.
+A QC programmer will compare your output against the table shell — SHELL FIDELITY IS CRITICAL.
+Return ONLY: { "r": "<R program>", "python": "<Python program>" }
 
-Return ONLY a JSON object: { "r": "<R program>", "python": "<Python program>" }
+━━━ DYNAMIC ENUMERATION (most important rule) ━━━
+The table shell shows EXAMPLE/REPRESENTATIVE values, NOT an exhaustive list.
+For row_groups rows with enumerate_dynamically=true:
+  - Python: use df[variable].unique() or df[variable].value_counts() to get ALL values
+  - R:      use unique() or levels() to discover all values dynamically
+  - NEVER hardcode the specific values shown in the shell — they are just examples
+For rows with enumerate_dynamically=false (specific pre-defined stats rows like "n / Mean (SD)"):
+  - These are computed rows, not category lists — calculate and display them as fixed rows
 
-━━━ SHELL FIDELITY RULES (apply to BOTH languages) ━━━
-1. Column headers: reproduce EXACTLY the labels from metadata.columns[].label
-2. Row structure: reproduce EXACT row group hierarchy and indentation from metadata.row_groups
-   - Group headers: bold/styled, no indentation
-   - Sub-rows: indented (2-4 spaces prefix on label cell)
-3. Statistical formats: match EXACTLY per metadata row_groups[].rows[].format
-   - "n (%)" → "X (XX.X%)" with one decimal
-   - "Mean (SD)" → "XX.X (X.X)" with one decimal
+The Data Analyst Findings below contain the ACTUAL unique values found in the data.
+Use these to verify your logic, but still write code that discovers values dynamically
+(the real data may differ from the sample).
+
+━━━ SHELL FIDELITY ━━━
+1. Column headers: reproduce EXACTLY from metadata.columns[].label
+2. Row group hierarchy: match indentation from metadata.row_groups exactly
+3. Statistical formats: match per metadata row_groups[].rows[].format
+   - "n (%)" → "X (XX.X%)" one decimal; missing → "—"
+   - "Mean (SD)" → "XX.X (X.X)" one decimal
    - "n / Mean (SD)" → "N / XX.X (X.X)"
    - "Median / Min, Max" → "XX.X / XX, XX"
-   - Missing/zero → show "—" (em dash), never blank or NaN
-4. Include table title from metadata.title as a visible header above the table
-5. Include all footnotes from metadata.footnotes below the table as small text
-6. Number alignment: center-align value cells, left-align row label column
+4. Table title from metadata.title; footnotes from metadata.footnotes
+5. Missing/zero values → "—" (em dash), never blank or NaN
 
-━━━ R CODE REQUIREMENTS ━━━
-- Datasets are PRE-LOADED into the R environment: access them directly by name (e.g. adsl, adae, ADSL, ADAE)
-- Do NOT call read.csv() — data is already available
-- Use dplyr and tidyr for all data manipulation
-- Use gt for table output — it produces HTML
-- The LAST line MUST assign HTML output: OUTPUT_HTML <- gt::as_raw_html(tbl)
-- Add tab_header(), tab_footnote() and cols_label() to the gt table for shell fidelity
-- This code runs live in the browser via WebR AND can be downloaded for local use
+━━━ R REQUIREMENTS ━━━
+- Datasets pre-loaded as R dataframes (access by name: adsl, adae, ADSL, ADAE etc.)
+- Do NOT call read.csv() — data is already in the environment
+- Use dplyr, tidyr for manipulation; gt for HTML output
+- Last line MUST be: OUTPUT_HTML <- gt::as_raw_html(tbl)
+- Use tab_header(), cols_label(), tab_footnote() on the gt object
 
-━━━ PYTHON CODE REQUIREMENTS ━━━
-- Load datasets: adsl = pd.read_csv('/datasets/ADSL.csv') — files are pre-mounted
-- Use pandas, numpy, scipy.stats for all computations
-- Build output as an HTML string — use manual HTML construction for maximum control over formatting
-- Do NOT use .to_html() alone — build a proper <table> with <thead>/<tbody>, styled cells
-- The LAST line MUST assign: OUTPUT_HTML = "<complete html table string>"
-- Apply inline styles: dark background (#0a1525), monospace font, proper borders
-- This code runs live in the browser via Pyodide`;
+━━━ PYTHON REQUIREMENTS ━━━
+- Load datasets: df = pd.read_csv('/datasets/DSNAME.csv')
+- Use pandas, numpy, scipy.stats
+- Build HTML manually for full formatting control — do not rely on .to_html() alone
+- Last line MUST be: OUTPUT_HTML = "<complete html string>"
+- Apply dark theme inline styles consistent with the app`;
 
-// Build a schema/preview string for each dataset (column list + 3 sample rows)
 function datasetsToSchemaPreview(adamDatasets, dsNames) {
   return dsNames
     .filter(ds => adamDatasets[ds])
@@ -56,7 +64,7 @@ function datasetsToSchemaPreview(adamDatasets, dsNames) {
     .join("\n\n");
 }
 
-export async function runCodeGenAgent({ parsedMeta, adamDatasets, addLog }) {
+export async function runCodeGenAgent({ parsedMeta, adamDatasets, adamSpec, analystFindings, addLog }) {
   addLog("agent", "[Code Gen Agent] Generating R + Python programs...");
 
   const dsNames = parsedMeta?.required_datasets?.length
@@ -65,13 +73,21 @@ export async function runCodeGenAgent({ parsedMeta, adamDatasets, addLog }) {
 
   const schemaPreview = datasetsToSchemaPreview(adamDatasets, dsNames);
 
+  // Build spec context for relevant variables
+  const relevantVars = parsedMeta?.key_variables || [];
+  const specContext = specToContextString(adamSpec, relevantVars);
+
+  // Format analyst findings as a readable section
+  const analystSection = analystFindings
+    ? `ANALYST FINDINGS (actual data values — use these for verification, but write dynamic code):\n${JSON.stringify(analystFindings, null, 2)}`
+    : "ANALYST FINDINGS: Not available — infer from dataset schemas below.";
+
   const raw = await callClaude(
     SYSTEM_PROMPT,
-    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\nDATASET SCHEMAS AND SAMPLE ROWS:\n${schemaPreview}`,
+    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\n${analystSection}\n\nDATA SCHEMAS (3-row sample):\n${schemaPreview}\n\nADAM SPEC:\n${specContext}`,
     7000
   );
 
-  // Parse JSON response — strip any accidental markdown fences
   const cleaned = raw.replace(/^```json?\n?/i, "").replace(/\n?```\s*$/i, "").trim();
   let parsed;
   try {

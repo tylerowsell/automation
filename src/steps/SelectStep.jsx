@@ -17,6 +17,7 @@ export default function SelectStep({
   onRunIngestion,
   onDatasetFiles,
   onShellFiles,
+  adamSpec, onSpecFile,
 }) {
   const [previewDs, setPreviewDs] = useState(null);
 
@@ -52,6 +53,53 @@ export default function SelectStep({
                 CDISC sample shells always available below<br />
                 Uploaded shells appear at top of the list
               </div>
+            </div>
+          </div>
+
+          {/* ADaM Spec upload */}
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontSize: "9px", letterSpacing: "0.1em", color: "#2a4a6a", marginBottom: "8px" }}>
+              ADAM SPEC FILE <span style={{ color: "#1a3050" }}>(optional — improves code generation)</span>
+            </div>
+            <div
+              style={{
+                border: `1px ${adamSpec ? "solid" : "dashed"} ${adamSpec ? "#1a5030" : "#1a3050"}`,
+                borderRadius: "5px", padding: "12px 16px", cursor: "pointer",
+                background: adamSpec ? "#071a0e" : "#050810",
+                transition: "all .2s", display: "flex", alignItems: "center", gap: "12px",
+              }}
+              onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".xlsx,.xls,.csv"; inp.onchange = e => { if (e.target.files[0]) onSpecFile(e.target.files[0]); }; inp.click(); }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) onSpecFile(e.dataTransfer.files[0]); }}
+            >
+              {adamSpec ? (
+                <>
+                  <span style={{ fontSize: "16px" }}>✓</span>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#3aaa50", fontFamily: "'IBM Plex Mono'" }}>{adamSpec.source}</div>
+                    <div style={{ fontSize: "10px", color: "#1a5030" }}>
+                      {adamSpec.variables.length} variables · {Object.keys(adamSpec.codelists).length} codelists
+                    </div>
+                  </div>
+                  <button
+                    className="btn-ghost"
+                    style={{ marginLeft: "auto", padding: "3px 10px", fontSize: "10px" }}
+                    onClick={e => { e.stopPropagation(); /* setAdamSpec(null) — handled by parent */ }}
+                  >✕</button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "20px", opacity: 0.5 }}>📑</span>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#2a5070", fontFamily: "'IBM Plex Mono'" }}>
+                      Drop ADaM spec XLSX/CSV here
+                    </div>
+                    <div style={{ fontSize: "10px", color: "#1a3050" }}>
+                      Variable labels · Codelists · Types — used by Data Analyst + Code Gen agents
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
