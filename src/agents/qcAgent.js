@@ -13,6 +13,7 @@ export async function runQcAgent({
   rCode,
   pyCode,
   parsedMeta,
+  adamDatasets,   // { DSNAME: { data: [...] } } — mounted to /datasets/ before execution
   addLog,
   setLoadingMsg,
   setQcAttempts,
@@ -35,7 +36,7 @@ export async function runQcAgent({
         result = await runPython(currentPyCode, msg => {
           onPyodideLoading?.(msg);
           setLoadingMsg(msg);
-        });
+        }, adamDatasets);
       } catch (e) {
         result = { success: false, html: null, stdout: "", error: e.message };
       }
@@ -72,7 +73,7 @@ export async function runQcAgent({
           const fixed = await callClaude(
             `Debug and fix this Python clinical TLF code for Pyodide execution.
 Requirements:
-- All data must be defined inline (no file I/O)
+- Load datasets using pd.read_csv('/datasets/{DSNAME}.csv') — files are pre-mounted in the runtime FS
 - Last line must assign OUTPUT_HTML
 - Use only pandas, numpy, scipy.stats
 Return ONLY corrected Python code.`,

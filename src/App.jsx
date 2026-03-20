@@ -204,6 +204,7 @@ export default function App() {
       rCode,
       pyCode,
       parsedMeta,
+      adamDatasets,
       addLog,
       setLoadingMsg,
       setQcAttempts,

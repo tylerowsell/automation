@@ -18,8 +18,9 @@ R CODE REQUIREMENTS:
 
 PYTHON CODE REQUIREMENTS:
 - Use pandas, numpy, scipy.stats for all computations
-- All data must be defined INLINE as Python dict literals (copy the data from the prompt exactly)
-- Do NOT use file I/O (open(), to_csv()) — no file paths allowed
+- Load datasets using pd.read_csv('/datasets/{DSNAME}.csv') — files are pre-loaded into the runtime FS
+- Example: adsl = pd.read_csv('/datasets/ADSL.csv')
+- Do NOT define data inline as dict literals
 - Build the output as an HTML string using pandas .to_html() or manual HTML construction
 - The LAST line MUST assign the final HTML to OUTPUT_HTML:
     OUTPUT_HTML = df_final.to_html(index=False, classes='tlf-table', border=0)
@@ -27,21 +28,15 @@ PYTHON CODE REQUIREMENTS:
 - Add inline comments explaining each clinical computation step
 - This code WILL be executed live in the browser via Pyodide`;
 
-// Serialise ADaM datasets as Python dict literals for inline embedding in code
-function datasetsToPythonDicts(adamDatasets, dsNames) {
+// Build a schema/preview string for each dataset (column list + 3 sample rows)
+function datasetsToSchemaPreview(adamDatasets, dsNames) {
   return dsNames
     .filter(ds => adamDatasets[ds])
     .map(ds => {
       const info = adamDatasets[ds];
-      const rows = info.data
-        .map(row => {
-          const pairs = Object.entries(row)
-            .map(([k, v]) => `"${k}": ${typeof v === "string" ? `"${v.replace(/"/g, '\\"')}"` : v}`)
-            .join(", ");
-          return `    {${pairs}}`;
-        })
-        .join(",\n");
-      return `# ${ds} — ${info.label}\n${ds}_data = [\n${rows}\n]`;
+      const cols = Object.keys(info.data[0] || {});
+      const sample = info.data.slice(0, 3);
+      return `# ${ds} (${info.data.length} rows) — available at /datasets/${ds}.csv\n# Columns: ${cols.join(", ")}\n${JSON.stringify(sample, null, 2)}`;
     })
     .join("\n\n");
 }
@@ -53,18 +48,11 @@ export async function runCodeGenAgent({ parsedMeta, adamDatasets, addLog }) {
     ? parsedMeta.required_datasets
     : Object.keys(adamDatasets).slice(0, 3);
 
-  // Small JSON preview for R context
-  const rPreview = dsNames
-    .filter(ds => adamDatasets[ds])
-    .map(ds => `# ${ds} (${adamDatasets[ds].data.length} rows):\n${JSON.stringify(adamDatasets[ds].data.slice(0, 3), null, 2)}`)
-    .join("\n\n");
-
-  // Full inline data for Python (so Pyodide code is self-contained)
-  const pythonData = datasetsToPythonDicts(adamDatasets, dsNames);
+  const schemaPreview = datasetsToSchemaPreview(adamDatasets, dsNames);
 
   const raw = await callClaude(
     SYSTEM_PROMPT,
-    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\nDATA PREVIEW (for R):\n${rPreview}\n\nINLINE DATA FOR PYTHON:\n${pythonData}`,
+    `METADATA:\n${JSON.stringify(parsedMeta, null, 2)}\n\nDATASET SCHEMAS AND SAMPLE ROWS:\n${schemaPreview}`,
     6000
   );
 

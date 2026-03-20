@@ -1,6 +1,7 @@
 // ─── Pyodide Python Runner ────────────────────────────────────────────────────
 // Loads Pyodide lazily on first use via CDN (script tag in index.html).
 // Installs pandas, numpy, scipy via micropip, then caches the instance.
+// Datasets are mounted as CSV files in the Pyodide virtual FS at /datasets/.
 
 let pyodideInstance = null;
 let initPromise = null;
@@ -8,6 +9,28 @@ let _isReady = false;
 
 export function isPyodideReady() {
   return _isReady;
+}
+
+// Convert an array of row objects to a CSV string
+function toCSV(rows) {
+  if (!rows || rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const escape = val => {
+    const s = val == null ? "" : String(val);
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [headers.join(","), ...rows.map(row => headers.map(h => escape(row[h])).join(","))].join("\n");
+}
+
+// Write each dataset as a CSV file into the Pyodide virtual FS at /datasets/{NAME}.csv
+export async function mountDatasets(datasets) {
+  const py = await initPyodide();
+  try { py.FS.mkdir("/datasets"); } catch {} // ignore if already exists
+  for (const [name, info] of Object.entries(datasets)) {
+    const csv = toCSV(info.data || []);
+    py.FS.writeFile(`/datasets/${name}.csv`, csv);
+  }
 }
 
 // Initialise Pyodide + packages (called lazily, only once per session)
@@ -36,8 +59,13 @@ export async function initPyodide(onProgress) {
 }
 
 // Execute a Python code string and return { success, html, stdout, error }
-export async function runPython(code, onProgress) {
+// datasets (optional): { DSNAME: { data: [...] } } — written to /datasets/ before execution
+export async function runPython(code, onProgress, datasets = null) {
   const py = await initPyodide(onProgress);
+
+  if (datasets) {
+    await mountDatasets(datasets);
+  }
 
   // Redirect stdout so we can capture print() output
   await py.runPythonAsync(`
