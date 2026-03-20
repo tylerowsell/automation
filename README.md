@@ -81,7 +81,39 @@ npm run dev
 
 Open `http://localhost:5173` in your browser.
 
-> **Note:** The app uses `Cross-Origin-Embedder-Policy: require-corp` headers (required for Pyodide/SharedArrayBuffer). These are set in `vite.config.js` for the dev server. For production, configure your web server accordingly.
+> **Note:** The app requires `Cross-Origin-Embedder-Policy: require-corp` and `Cross-Origin-Opener-Policy: same-origin` headers for Pyodide (SharedArrayBuffer). These are set automatically in `vite.config.js` for the dev server.
+
+### Deploying to production
+
+Static hosts do not send these headers by default — Python execution will silently fail without them. Add them at the host level:
+
+**Netlify** — create `public/_headers`:
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+**Vercel** — add to `vercel.json`:
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+      ]
+    }
+  ]
+}
+```
+
+**Nginx**:
+```nginx
+add_header Cross-Origin-Opener-Policy "same-origin";
+add_header Cross-Origin-Embedder-Policy "require-corp";
+```
 
 ---
 
