@@ -75,50 +75,98 @@ export default function GenerateStep({
   );
 }
 
+// Small pill chip used for controlled-term value lists
+function ValueChip({ value, color = "teal" }) {
+  const palettes = {
+    teal:   { bg: "#041414", border: "#0a2a2a", text: "#30a0a0" },
+    blue:   { bg: "#040814", border: "#0a1a38", text: "#3070c0" },
+    purple: { bg: "#08040e", border: "#1a0a30", text: "#7050c0" },
+  };
+  const p = palettes[color] || palettes.teal;
+  return (
+    <span style={{
+      padding: "1px 6px", fontSize: "9.5px", borderRadius: "3px",
+      background: p.bg, border: `1px solid ${p.border}`,
+      color: p.text, fontFamily: "'IBM Plex Mono'", whiteSpace: "nowrap",
+    }}>
+      {value}
+    </span>
+  );
+}
+
 // ─── Analyst findings panel ───────────────────────────────────────────────────
-// Displays structural findings only — no actual data values shown or stored.
+// Controlled-term variables (PARAMCD, AVISIT, etc.) show actual values — these
+// are protocol metadata. Subject-level variables show cardinality count only.
 function AnalystFindingsView({ findings }) {
   if (!findings) return null;
-  const { arm_variable, arm_n_unique, variables = {}, notes = [] } = findings;
+  const { arm_variable, arm_values, arm_n_unique, param_values, visit_values, variables = {}, notes = [] } = findings;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
 
-      {/* Privacy badge */}
+      {/* Privacy / data tier indicator */}
       <div style={{
         display: "flex", alignItems: "center", gap: "8px",
         padding: "8px 12px", background: "#050f0a", border: "1px solid #0d2a1a", borderRadius: "5px",
       }}>
         <span style={{ fontSize: "12px" }}>🔒</span>
         <span style={{ fontSize: "10px", color: "#2a7040", fontFamily: "'IBM Plex Mono'" }}>
-          Privacy-safe analysis — variable structure only, no data values sent to API
+          Controlled-term values (PARAMCD, AVISIT, etc.) shown · Subject-level values withheld
         </span>
       </div>
 
-      {/* Treatment arm summary */}
-      <div style={{ padding: "10px 14px", background: "#06101e", border: "1px solid #0d2840", borderRadius: "5px" }}>
-        <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "5px" }}>TREATMENT ARM</div>
-        <div style={{ fontSize: "11px", color: "#3a7090", fontFamily: "'IBM Plex Mono'" }}>
-          {arm_variable || "—"}
-          {arm_n_unique != null && (
-            <span style={{ color: "#2a6080" }}> — {arm_n_unique} distinct arm(s) in data</span>
-          )}
+      {/* Key controlled-term summaries */}
+      <div style={{ display: "grid", gridTemplateColumns: arm_values?.length ? "1fr 1fr" : "1fr", gap: "8px" }}>
+        {/* Arms */}
+        <div style={{ padding: "10px 14px", background: "#06101e", border: "1px solid #0d2840", borderRadius: "5px" }}>
+          <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "5px" }}>TREATMENT ARMS</div>
+          <div style={{ fontSize: "11px", color: "#4fc3f7", fontFamily: "'IBM Plex Mono'", marginBottom: "2px" }}>
+            {arm_variable || "—"}
+          </div>
+          {arm_values?.length > 0
+            ? <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                {arm_values.map(v => <ValueChip key={v} value={v} color="blue" />)}
+              </div>
+            : arm_n_unique != null && (
+                <div style={{ fontSize: "10px", color: "#2a6080" }}>{arm_n_unique} arm(s)</div>
+              )
+          }
         </div>
+
+        {/* PARAMCDs if present */}
+        {param_values?.length > 0 && (
+          <div style={{ padding: "10px 14px", background: "#06101e", border: "1px solid #0d2840", borderRadius: "5px" }}>
+            <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "5px" }}>PARAMCD VALUES</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              {param_values.map(v => <ValueChip key={v} value={v} color="teal" />)}
+            </div>
+          </div>
+        )}
+
+        {/* Visits if present */}
+        {visit_values?.length > 0 && (
+          <div style={{ padding: "10px 14px", background: "#06101e", border: "1px solid #0d2840", borderRadius: "5px" }}>
+            <div style={{ fontSize: "9px", letterSpacing: ".1em", color: "#1a4060", marginBottom: "5px" }}>VISIT VALUES</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              {visit_values.map(v => <ValueChip key={v} value={v} color="purple" />)}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Variables table */}
       <div style={{ border: "1px solid #111e30", borderRadius: "5px", overflow: "hidden" }}>
         <div style={{
-          display: "grid", gridTemplateColumns: "140px 90px 80px 1fr",
+          display: "grid", gridTemplateColumns: "130px 80px 70px 1fr",
           padding: "6px 12px", background: "#060a14",
           fontSize: "9px", letterSpacing: ".08em", color: "#1a3050",
           borderBottom: "1px solid #111e30",
         }}>
-          <span>VARIABLE</span><span>TYPE</span><span>CARDINALITY</span><span>STATS / NOTES</span>
+          <span>VARIABLE</span><span>TYPE</span><span>COUNT</span><span>VALUES / STATS</span>
         </div>
         {Object.entries(variables).map(([varName, info], i) => (
           <div key={varName} style={{
-            display: "grid", gridTemplateColumns: "140px 90px 80px 1fr",
+            display: "grid", gridTemplateColumns: "130px 80px 70px 1fr",
             padding: "7px 12px", alignItems: "start",
             background: i % 2 === 0 ? "#050810" : "#060a14",
             borderBottom: "1px solid #0c1420",
@@ -143,14 +191,19 @@ function AnalystFindingsView({ findings }) {
             </div>
 
             {/* Cardinality */}
-            <div style={{ fontFamily: "'IBM Plex Mono'", color: "#3a6080", fontSize: "11px" }}>
+            <div style={{ fontFamily: "'IBM Plex Mono'", color: "#3a6080", fontSize: "10px" }}>
               {info.n_unique != null
-                ? <span>{info.n_unique} unique</span>
+                ? <span>{info.n_unique}</span>
                 : <span style={{ color: "#1a3050" }}>—</span>}
             </div>
 
-            {/* Stats or codelist note */}
+            {/* Values (controlled-term) OR stats (numeric) OR note */}
             <div>
+              {info.values?.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "3px" }}>
+                  {info.values.map(v => <ValueChip key={v} value={String(v)} color="teal" />)}
+                </div>
+              )}
               {info.type === "numeric" && info.stats && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                   {Object.entries(info.stats).map(([k, v]) => (
@@ -164,11 +217,9 @@ function AnalystFindingsView({ findings }) {
                 </div>
               )}
               {info.codelist && (
-                <div style={{ fontSize: "10px", color: "#1a4030", marginTop: "2px" }}>
-                  codelist: {info.codelist}
-                </div>
+                <div style={{ fontSize: "10px", color: "#1a4030", marginTop: "2px" }}>codelist: {info.codelist}</div>
               )}
-              {info.note && (
+              {info.note && !info.values?.length && (
                 <div style={{ fontSize: "10px", color: "#3a5020", marginTop: "2px" }}>ℹ {info.note}</div>
               )}
             </div>
