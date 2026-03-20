@@ -7,19 +7,18 @@ export default function GenerateStep({
   language, loading,
   onRunExecute,
 }) {
-  // Default tab: python if language=python, else r
   const [codeTab, setCodeTab] = useState(language === "python" ? "python" : "r");
 
   const tabs = [
     {
       key: "python",
-      label: "PYTHON (LIVE)",
-      badge: { label: "● EXECUTABLE", color: "green" },
+      label: "PYTHON",
+      badge: { label: "● PYODIDE", color: "green" },
     },
     {
       key: "r",
-      label: "R (DOWNLOAD)",
-      badge: { label: "DOWNLOAD ONLY", color: "grey" },
+      label: "R",
+      badge: { label: "● WEBR", color: "blue" },
     },
     { key: "meta", label: "METADATA" },
   ];
@@ -27,23 +26,26 @@ export default function GenerateStep({
   return (
     <div>
       <div style={{ marginBottom: "18px", display: "flex", alignItems: "center", gap: "12px" }}>
-        <h2 style={{ fontFamily: "'IBM Plex Sans'", fontSize: "18px", fontWeight: 600, color: "#d0e8f8" }}>Generated Code</h2>
+        <h2 style={{ fontFamily: "'IBM Plex Sans'", fontSize: "18px", fontWeight: 600, color: "#c8e0f8" }}>Generated Code</h2>
         <span className="badge b-ok">CODE READY</span>
+        <span style={{ fontSize: "10px", color: "#2a5070" }}>Both languages executable in the browser</span>
       </div>
 
       <CodeViewer tabs={tabs} activeTab={codeTab} onTabChange={setCodeTab}>
         {codeTab === "python" && (
           <div>
-            <div style={{ marginBottom: "8px", fontSize: "10px", color: "#3a7a4a" }}>
-              This Python code will execute live in your browser via Pyodide. Output will be rendered as an HTML table.
+            <div style={{ marginBottom: "10px", fontSize: "10px", color: "#2a6a3a", lineHeight: 1.6 }}>
+              Executes live in your browser via <strong>Pyodide</strong>. Datasets pre-mounted at <code>/datasets/*.csv</code>.
+              Output rendered as an HTML table.
             </div>
             <pre className="code-pre">{pyCode}</pre>
           </div>
         )}
         {codeTab === "r" && (
           <div>
-            <div style={{ marginBottom: "8px", fontSize: "10px", color: "#5a5a3a" }}>
-              Download this R program and run it in your local R environment (tidyverse, gtsummary, r2rtf required).
+            <div style={{ marginBottom: "10px", fontSize: "10px", color: "#1a4a70", lineHeight: 1.6 }}>
+              Executes live in your browser via <strong>WebR</strong>. Datasets pre-loaded as R dataframes.
+              Also downloadable for your local R environment.
             </div>
             <pre className="code-pre">{rCode}</pre>
           </div>
@@ -57,17 +59,15 @@ export default function GenerateStep({
         <button className="btn-primary" onClick={onRunExecute} disabled={loading}>
           {loading
             ? <span className="pulse">⟳ Executing...</span>
-            : language === "python" ? "▶ Execute Python + QC Agent →" : "▶ Execute R (simulated) + QC Agent →"}
+            : `▶ Execute ${language === "python" ? "Python (Pyodide)" : "R (WebR)"} + QC Agent →`}
         </button>
-        {language === "r" && (
-          <a
-            href={`data:text/plain;charset=utf-8,${encodeURIComponent(rCode)}`}
-            download={`${selectedShell?.id || "tlf"}.R`}
-            style={{ fontSize: "11px", color: "#5090b8", textDecoration: "none" }}
-          >
-            ↓ Download R script
-          </a>
-        )}
+        <a
+          href={`data:text/plain;charset=utf-8,${encodeURIComponent(language === "python" ? pyCode : rCode)}`}
+          download={`${selectedShell?.id || "tlf"}.${language === "python" ? "py" : "R"}`}
+          style={{ fontSize: "11px", color: "#3a708a", textDecoration: "none" }}
+        >
+          ↓ Download {language === "python" ? "Python" : "R"} script
+        </a>
       </div>
     </div>
   );

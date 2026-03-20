@@ -1,23 +1,23 @@
 import { callClaude } from "../config/apiConfig.js";
-import { simulateRExecution } from "../execution/rSimulator.js";
 import { runPython, initPyodide } from "../execution/pyodideRunner.js";
+import { runR, initWebR } from "../execution/webRRunner.js";
 
 // ─── QC Agent — self-correcting execution loop ────────────────────────────────
-// For Python: real Pyodide execution with live error feedback
-// For R:      simulated execution (R cannot run in the browser)
+// Python: real Pyodide execution with live error feedback
+// R:      real WebR execution with live error feedback
 
 const MAX_ATTEMPTS = 3;
 
 export async function runQcAgent({
-  language,       // "python" | "r"
+  language,
   rCode,
   pyCode,
   parsedMeta,
-  adamDatasets,   // { DSNAME: { data: [...] } } — mounted to /datasets/ before execution
+  adamDatasets,
   addLog,
   setLoadingMsg,
   setQcAttempts,
-  onPyodideLoading,
+  onRuntimeLoading,  // called while runtime is initialising
 }) {
   addLog("agent", "[QC Agent] Starting execution loop...");
   const attempts = [];
@@ -26,24 +26,28 @@ export async function runQcAgent({
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     setLoadingMsg(`QC Agent — Attempt ${attempt + 1}/${MAX_ATTEMPTS}...`);
-    addLog("info", `Attempt ${attempt + 1}: Running ${language === "python" ? "Python (Pyodide)" : "R (simulated)"}...`);
+    addLog("info", `Attempt ${attempt + 1}: Running ${language === "python" ? "Python (Pyodide)" : "R (WebR)"}...`);
 
     let result;
 
     if (language === "python") {
-      // Real Python execution via Pyodide
       try {
         result = await runPython(currentPyCode, msg => {
-          onPyodideLoading?.(msg);
+          onRuntimeLoading?.(msg);
           setLoadingMsg(msg);
         }, adamDatasets);
       } catch (e) {
         result = { success: false, html: null, stdout: "", error: e.message };
       }
     } else {
-      // R execution is simulated — add a small delay to mimic runtime
-      await new Promise(r => setTimeout(r, 1200 + Math.random() * 600));
-      result = simulateRExecution(attempt);
+      try {
+        result = await runR(currentRCode, msg => {
+          onRuntimeLoading?.(msg);
+          setLoadingMsg(msg);
+        }, adamDatasets);
+      } catch (e) {
+        result = { success: false, html: null, error: e.message };
+      }
     }
 
     if (result.success) {
@@ -73,17 +77,22 @@ export async function runQcAgent({
           const fixed = await callClaude(
             `Debug and fix this Python clinical TLF code for Pyodide execution.
 Requirements:
-- Load datasets using pd.read_csv('/datasets/{DSNAME}.csv') — files are pre-mounted in the runtime FS
-- Last line must assign OUTPUT_HTML
+- Load datasets using pd.read_csv('/datasets/DSNAME.csv') — files are pre-mounted
+- Last line must assign OUTPUT_HTML as an HTML string
 - Use only pandas, numpy, scipy.stats
-Return ONLY corrected Python code.`,
+Return ONLY corrected Python code, no explanation.`,
             `ERROR:\n${result.error}\n\nCODE:\n${currentPyCode}\n\nMETADATA:\n${JSON.stringify(parsedMeta, null, 2)}`,
             4000
           );
           currentPyCode = fixed.replace(/^```python\n?/i, "").replace(/```\s*$/i, "").trim();
         } else {
           const fixed = await callClaude(
-            "Debug and fix this R clinical TLF code. Return ONLY corrected R code.",
+            `Debug and fix this R clinical TLF code for WebR (browser) execution.
+Requirements:
+- Datasets are PRE-LOADED in the environment — do NOT call read.csv()
+- Use dplyr and gt packages only
+- Last line must assign: OUTPUT_HTML <- gt::as_raw_html(tbl)
+Return ONLY corrected R code, no explanation.`,
             `ERROR:\n${result.error}\n\nCODE:\n${currentRCode}\n\nMETADATA:\n${JSON.stringify(parsedMeta, null, 2)}`,
             4000
           );

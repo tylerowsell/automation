@@ -4,8 +4,8 @@ export default function Header({
   language, setLanguage,
   loading, uploadProcessing,
   onReset, onFullReset,
-  codeReady,            // true once code has been generated
-  onLanguageChange,     // called when language toggled after code is generated
+  codeReady,
+  onLanguageChange,
 }) {
   function handleLangChange(lang) {
     if (lang === language) return;
@@ -14,24 +14,31 @@ export default function Header({
   }
 
   return (
-    <div style={{ background: "#060a12", borderBottom: "1px solid #1a2d45", padding: "0 24px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "56px" }}>
+    <div style={{ background: "#050810", borderBottom: "1px solid #121c2e" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "54px", padding: "0 24px" }}>
+
         {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0088ff", boxShadow: "0 0 8px #0088ff" }} />
-            <span style={{ fontFamily: "'IBM Plex Mono'", fontSize: "13px", fontWeight: 600, letterSpacing: "0.12em", color: "#c0d8f0" }}>
-              TLF<span style={{ color: "#4fc3f7" }}>·</span>AGENTIC
+        <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="3" fill="#0088ff" opacity="0.9"/>
+              <circle cx="10" cy="10" r="6" stroke="#0055aa" strokeWidth="1" fill="none" opacity="0.5"/>
+              <circle cx="10" cy="10" r="9" stroke="#003366" strokeWidth="0.5" fill="none" opacity="0.3"/>
+            </svg>
+            <span style={{ fontFamily: "'IBM Plex Mono'", fontSize: "13px", fontWeight: 600, letterSpacing: "0.14em", color: "#b8d4ee" }}>
+              TLF<span style={{ color: "#2a90d0" }}>·</span>AGENTIC
             </span>
           </div>
-          <span style={{ fontSize: "10px", color: "#2a4a6a", letterSpacing: "0.08em" }}>CLINICAL OUTPUT AUTOMATION</span>
+          <span style={{ fontSize: "10px", color: "#1a3050", letterSpacing: "0.1em", fontFamily: "'IBM Plex Mono'" }}>
+            CLINICAL QC AUTOMATION
+          </span>
         </div>
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {/* Language toggle */}
-          <div style={{ display: "flex", gap: "3px", background: "#060a12", border: "1px solid #1a2d45", borderRadius: "5px", padding: "3px" }}>
-            {[["python", "🐍 PYTHON"], ["r", "📊 R"]].map(([lang, label]) => (
+          <div style={{ display: "flex", gap: "2px", background: "#030608", border: "1px solid #111e30", borderRadius: "5px", padding: "3px" }}>
+            {[["python", "🐍 Python"], ["r", "R"]].map(([lang, label]) => (
               <button
                 key={lang}
                 className={`btn-mode ${language === lang ? "active" : "inactive"}`}
@@ -41,8 +48,8 @@ export default function Header({
           </div>
 
           {/* Sample / Upload toggle */}
-          <div style={{ display: "flex", gap: "3px", background: "#060a12", border: "1px solid #1a2d45", borderRadius: "5px", padding: "3px" }}>
-            {[["sample", "SAMPLE DATA"], ["upload", "UPLOAD FILES"]].map(([m, l]) => (
+          <div style={{ display: "flex", gap: "2px", background: "#030608", border: "1px solid #111e30", borderRadius: "5px", padding: "3px" }}>
+            {[["sample", "Sample Data"], ["upload", "Upload Files"]].map(([m, l]) => (
               <button
                 key={m}
                 className={`btn-mode ${appMode === m ? "active" : "inactive"}`}
@@ -51,10 +58,12 @@ export default function Header({
             ))}
           </div>
 
-          <button className="btn-ghost" onClick={onFullReset} style={{ fontSize: "10px" }}>↺ RESET</button>
+          <div style={{ width: "1px", height: "24px", background: "#111e30" }} />
+          <button className="btn-ghost" onClick={onFullReset} style={{ fontSize: "10px", padding: "5px 12px" }}>↺ Reset</button>
         </div>
       </div>
 
+      {/* Loading bar */}
       {(loading || uploadProcessing) && <div className="lbar" />}
     </div>
   );
